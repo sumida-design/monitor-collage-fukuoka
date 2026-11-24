@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#000000">
+<title>モニター写真作成</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+  <h1>モニター写真作成</h1>
+
+  <div class="stage"><canvas id="canvas"></canvas></div>
+  <p class="hint">マスをタップすると、その1枚だけ差し替えできます</p>
+
+  <section class="panel">
+    <button id="pick" class="primary">写真を選ぶ（複数OK）</button>
+    <input id="files" type="file" accept="image/*" multiple hidden>
+    <input id="one" type="file" accept="image/*" hidden>
+
+    <label>レイアウト
+      <select id="layout"></select>
+    </label>
+    <label>余白 <output id="gapOut"></output>
+      <input id="gap" type="range" min="0" max="40" value="8">
+    </label>
+    <label>背景色
+      <input id="bg" type="color" value="#ffffff">
+    </label>
+    <label>キャプション
+      <input id="caption" type="text" placeholder="例：商品名 / 日付など">
+    </label>
+
+    <div class="row">
+      <button id="clear">クリア</button>
+      <button id="save" class="primary">画像を保存</button>
+    </div>
+  </section>
+</main>
+<script src="app.js"></script>
+</body>
+</html>
