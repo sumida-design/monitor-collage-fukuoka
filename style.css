@@ -27,3 +27,8 @@ button.primary { background:var(--accent); }
   display:flex; align-items:center; justify-content:center; padding:16px; }
 .modal-box { width:100%; max-width:640px; display:flex; flex-direction:column; gap:12px; }
 #edCanvas { width:100%; background:#000; border-radius:8px; touch-action:none; cursor:grab; }
+#mCanvas { display:block; max-width:100%; max-height:60vh; margin:0 auto; background:#000;
+  border-radius:8px; touch-action:none; }
+.status p { margin:0 0 6px; }
+button.warn { width:100%; text-align:left; background:#3a2a00; color:#ffb340;
+  border:1px solid #ff9f0a; font-size:13px; padding:10px; margin-bottom:6px; }

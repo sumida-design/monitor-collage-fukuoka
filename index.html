@@ -13,21 +13,17 @@
   <h1>モニター写真作成</h1>
 
   <div class="stage"><canvas id="canvas"></canvas></div>
-  <p class="hint">＋をタップして写真を選択／写真をタップすると拡大縮小・位置調整<br>書き出しサイズ：3840×2160px（背景は黒で書き出されます）</p>
+  <p class="hint" id="hint"></p>
 
   <section class="panel">
-    <label>余白 <output id="gapOut"></output>
-      <input id="gap" type="range" min="0" max="80" value="16">
-    </label>
-
     <div class="switch">
-      <span>目元ぼかし（左右の目に丸いぼかし）</span>
+      <span>目元ぼかし（目の部分に丸いぼかし）</span>
       <input id="blurOn" type="checkbox">
     </div>
     <label id="blurSizeWrap" hidden>ぼかしの大きさ <output id="blurSizeOut"></output>
-      <input id="blurSize" type="range" min="50" max="250" value="120">
+      <input id="blurSize" type="range" min="50" max="250" value="100">
     </label>
-    <p id="status" class="status"></p>
+    <div id="status" class="status"></div>
 
     <div class="row">
       <button id="clear">クリア</button>
@@ -50,6 +46,22 @@
       <button id="edCancel">キャンセル</button>
       <button id="edChange">画像を変更</button>
       <button id="edSave" class="primary">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 手動ぼかし -->
+<div id="manual" class="modal" hidden>
+  <div class="modal-box">
+    <p class="hint">目の位置をタップするとぼかしの丸が置かれます。ドラッグで移動できます。</p>
+    <canvas id="mCanvas"></canvas>
+    <label>選択中の丸の大きさ
+      <input id="mSize" type="range" min="10" max="200" value="60">
+    </label>
+    <div class="row">
+      <button id="mDelete">選択した丸を削除</button>
+      <button id="mCancel">キャンセル</button>
+      <button id="mDone" class="primary">完了</button>
     </div>
   </div>
 </div>
