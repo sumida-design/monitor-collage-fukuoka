@@ -13,21 +13,11 @@
   <h1>モニター写真作成</h1>
 
   <div class="stage"><canvas id="canvas"></canvas></div>
-  <p class="hint">マスをタップすると、その1枚だけ差し替えできます<br>書き出しサイズ：3840×2160px</p>
+  <p class="hint">＋をタップして写真を選択／写真をタップすると拡大縮小・位置調整<br>書き出しサイズ：3840×2160px（背景は黒で書き出されます）</p>
 
   <section class="panel">
-    <button id="pick" class="primary">写真を選ぶ（複数OK）</button>
-    <input id="files" type="file" accept="image/*" multiple hidden>
-    <input id="one" type="file" accept="image/*" hidden>
-
-    <label>レイアウト
-      <select id="layout"></select>
-    </label>
     <label>余白 <output id="gapOut"></output>
       <input id="gap" type="range" min="0" max="80" value="16">
-    </label>
-    <label>キャプション
-      <input id="caption" type="text" placeholder="例：商品名 / 日付など">
     </label>
 
     <div class="switch">
@@ -45,6 +35,25 @@
     </div>
   </section>
 </main>
+
+<input id="one" type="file" accept="image/*" hidden>
+
+<!-- 拡大縮小・位置調整 -->
+<div id="editor" class="modal" hidden>
+  <div class="modal-box">
+    <p class="hint">ドラッグで位置、ピンチ／スライダーで拡大縮小</p>
+    <canvas id="edCanvas"></canvas>
+    <label>拡大 <output id="zoomOut"></output>
+      <input id="zoom" type="range" min="100" max="500" value="100">
+    </label>
+    <div class="row">
+      <button id="edCancel">キャンセル</button>
+      <button id="edChange">画像を変更</button>
+      <button id="edSave" class="primary">保存</button>
+    </div>
+  </div>
+</div>
+
 <script src="app.js"></script>
 </body>
 </html>

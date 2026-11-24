@@ -1,19 +1,16 @@
 // ===== 設定 =====
-const LAYOUTS = [
-  { id: '2x2', label: '2×2（4枚）', cols: 2, rows: 2 },
-  { id: '1x2', label: '縦2枚',     cols: 1, rows: 2 },
-  { id: '2x1', label: '横2枚',     cols: 2, rows: 1 },
-  { id: '2x3', label: '2×3（6枚）', cols: 2, rows: 3 },
-  { id: '3x3', label: '3×3（9枚）', cols: 3, rows: 3 },
-];
-const OUT_W = 3840, OUT_H = 2160; // 書き出しサイズ固定
-const BG = '#000000';             // 背景色固定
-const CAPTION_HEIGHT = 160;
-const DETECT_MAX = 1280;          // 目の検出用に縮小する最大辺(px)
+const OUT_W = 3840, OUT_H = 2160;   // 書き出しサイズ（固定）
+const BG_EXPORT = '#000000';        // 書き出し時の背景色（黒）
+const BG_PREVIEW = '#2c2c2e';       // プレビュー時の背景色
+const COLS = 2, ROWS = 2;           // 2×2固定
+const DETECT_MAX = 1280;            // 目の検出用に縮小する最大辺(px)
+const ZOOM_MAX = 5;
 
 // ===== 状態 =====
-const state = { layout: LAYOUTS[0], images: [], gap: 16, caption: '', blurOn: false, blurSize: 1.2 };
+// cells[i] = { img, zoom, cx, cy }  cx,cy = 表示範囲の中心（画像ピクセル座標）
+const state = { cells: [null, null, null, null], gap: 16, blurOn: false, blurSize: 1.2 };
 let targetCell = null;
+let curBg = BG_PREVIEW;
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('canvas');
@@ -21,61 +18,61 @@ const ctx = canvas.getContext('2d');
 canvas.width = OUT_W;
 canvas.height = OUT_H;
 
-// ===== 描画 =====
-function draw() {
-  const { cols, rows } = state.layout;
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+
+// ===== 共通：マスの寸法 =====
+function geom() {
   const g = state.gap;
-  const capH = state.caption ? CAPTION_HEIGHT : 0;
-  const cw = (OUT_W - g * (cols + 1)) / cols;
-  const ch = (OUT_H - capH - g * (rows + 1)) / rows;
-
-  ctx.fillStyle = BG;
-  ctx.fillRect(0, 0, OUT_W, OUT_H);
-
-  for (let i = 0; i < cols * rows; i++) {
-    const x = g + (i % cols) * (cw + g);
-    const y = g + Math.floor(i / cols) * (ch + g);
-    const img = state.images[i];
-    if (img) {
-      drawCover(img, x, y, cw, ch);
-      if (state.blurOn && img.eyes) blurEyes(img, x, y, cw, ch);
-    } else {
-      ctx.fillStyle = '#222';
-      ctx.fillRect(x, y, cw, ch);
-      ctx.fillStyle = '#666';
-      ctx.font = `${Math.min(cw, ch) * 0.25}px sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('+', x + cw / 2, y + ch / 2);
-    }
-  }
-
-  if (state.caption) {
-    ctx.fillStyle = '#fff';
-    ctx.font = 'bold 80px -apple-system, "Hiragino Sans", sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(state.caption, OUT_W / 2, OUT_H - capH / 2 - g / 2, OUT_W - 120);
-  }
+  return { g, cw: (OUT_W - g * (COLS + 1)) / COLS, ch: (OUT_H - g * (ROWS + 1)) / ROWS };
 }
 
-function drawCover(img, x, y, w, h) {
-  const r = Math.max(w / img.width, h / img.height);
+// 画像をトリミング範囲つきで描画。使った変換情報を返す
+function drawImg(c2, img, t, x, y, w, h) {
+  const r = Math.max(w / img.width, h / img.height) * t.zoom;
   const sw = w / r, sh = h / r;
-  ctx.drawImage(img, (img.width - sw) / 2, (img.height - sh) / 2, sw, sh, x, y, w, h);
+  const cx = clamp(t.cx, sw / 2, img.width - sw / 2);
+  const cy = clamp(t.cy, sh / 2, img.height - sh / 2);
+  const sx = cx - sw / 2, sy = cy - sh / 2;
+  c2.drawImage(img, sx, sy, sw, sh, x, y, w, h);
+  return { sx, sy, r };
+}
+
+// ===== プレビュー／書き出し描画 =====
+function draw(forExport = false) {
+  curBg = forExport ? BG_EXPORT : BG_PREVIEW;
+  const { g, cw, ch } = geom();
+  ctx.fillStyle = curBg;
+  ctx.fillRect(0, 0, OUT_W, OUT_H);
+
+  for (let i = 0; i < COLS * ROWS; i++) {
+    const x = g + (i % COLS) * (cw + g);
+    const y = g + Math.floor(i / COLS) * (ch + g);
+    const cell = state.cells[i];
+    if (cell) {
+      const m = drawImg(ctx, cell.img, cell, x, y, cw, ch);
+      if (state.blurOn && cell.img.eyes) blurEyes(cell.img, m, x, y, cw, ch);
+    } else if (!forExport) {
+      ctx.fillStyle = '#3a3a3c';
+      ctx.fillRect(x, y, cw, ch);
+      // ＋マーク
+      const s = Math.min(cw, ch) * 0.12;
+      ctx.strokeStyle = '#aaa';
+      ctx.lineWidth = Math.max(6, s * 0.18);
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(x + cw / 2 - s, y + ch / 2); ctx.lineTo(x + cw / 2 + s, y + ch / 2);
+      ctx.moveTo(x + cw / 2, y + ch / 2 - s); ctx.lineTo(x + cw / 2, y + ch / 2 + s);
+      ctx.stroke();
+    }
+  }
 }
 
 // ===== 目元ぼかし =====
-function blurEyes(img, x, y, w, h) {
-  const r = Math.max(w / img.width, h / img.height);
-  const ox = (img.width - w / r) / 2, oy = (img.height - h / r) / 2;
+function blurEyes(img, m, x, y, w, h) {
   ctx.save();
-  ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip(); // マスの外にはみ出さない
+  ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
   for (const e of img.eyes) {
-    const cx = x + (e.x - ox) * r;
-    const cy = y + (e.y - oy) * r;
-    const rad = e.r * r * state.blurSize;
-    blurCircle(cx, cy, rad);
+    blurCircle(x + (e.x - m.sx) * m.r, y + (e.y - m.sy) * m.r, e.r * m.r * state.blurSize);
   }
   ctx.restore();
 }
@@ -85,14 +82,13 @@ function blurCircle(cx, cy, rad) {
   const tmp = document.createElement('canvas');
   tmp.width = tmp.height = size;
   const t = tmp.getContext('2d');
-  t.fillStyle = BG; t.fillRect(0, 0, size, size);
+  t.fillStyle = curBg; t.fillRect(0, 0, size, size);
   t.drawImage(canvas, cx - rad, cy - rad, rad * 2, rad * 2, 0, 0, size, size);
 
   const id = t.getImageData(0, 0, size, size);
   boxBlur(id.data, size, size, Math.max(2, Math.round(rad * 0.3)));
   t.putImageData(id, 0, 0);
 
-  // 縁をなめらかにする丸いマスク
   t.globalCompositeOperation = 'destination-in';
   const grad = t.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
   grad.addColorStop(0, 'rgba(0,0,0,1)');
@@ -152,7 +148,6 @@ async function detectEyes(img, lm) {
   const res = lm.detect(c);
   const eyes = [];
   for (const face of res.faceLandmarks) {
-    // [目尻, 目頭] の組：左目(33,133) 右目(362,263)
     for (const [a, b] of [[33, 133], [362, 263]]) {
       const p = face[a], q = face[b];
       const ax = p.x * img.width, ay = p.y * img.height;
@@ -164,13 +159,13 @@ async function detectEyes(img, lm) {
 }
 
 async function ensureEyes() {
-  const targets = state.images.filter((im) => im && !im.eyes);
+  const targets = state.cells.filter((c) => c && !c.img.eyes).map((c) => c.img);
   if (!targets.length) return;
   setStatus('目の検出中…（初回はモデル読み込みに数秒かかります）');
   try {
     const lm = await getLandmarker();
     for (const im of targets) im.eyes = await detectEyes(im, lm);
-    const none = state.images.filter((im) => im && im.eyes.length === 0).length;
+    const none = state.cells.filter((c) => c && c.img.eyes && c.img.eyes.length === 0).length;
     setStatus(none ? `顔を検出できなかった写真が ${none} 枚あります` : '');
   } catch (err) {
     console.error(err);
@@ -191,12 +186,80 @@ function loadImage(file) {
     img.src = url;
   });
 }
+const newCell = (img) => ({ img, zoom: 1, cx: img.width / 2, cy: img.height / 2 });
+
+// ===== 拡大縮小・位置調整エディタ =====
+const edCanvas = $('edCanvas');
+const edCtx = edCanvas.getContext('2d');
+let ed = null; // { i, img, zoom, cx, cy }
+const pointers = new Map();
+
+function openEditor(i) {
+  const c = state.cells[i];
+  ed = { i, img: c.img, zoom: c.zoom, cx: c.cx, cy: c.cy };
+  const { cw, ch } = geom();
+  edCanvas.width = 1280;
+  edCanvas.height = Math.round(1280 * ch / cw);
+  $('editor').hidden = false;
+  syncZoomUI();
+  drawEd();
+}
+function drawEd() {
+  edCtx.fillStyle = '#000';
+  edCtx.fillRect(0, 0, edCanvas.width, edCanvas.height);
+  const m = drawImg(edCtx, ed.img, ed, 0, 0, edCanvas.width, edCanvas.height);
+  // クランプ後の中心を保持
+  ed.cx = m.sx + edCanvas.width / m.r / 2;
+  ed.cy = m.sy + edCanvas.height / m.r / 2;
+}
+function syncZoomUI() {
+  $('zoom').value = Math.round(ed.zoom * 100);
+  $('zoomOut').textContent = Math.round(ed.zoom * 100) + '%';
+}
+function setZoom(z) { ed.zoom = clamp(z, 1, ZOOM_MAX); syncZoomUI(); drawEd(); }
+function closeEditor() { $('editor').hidden = true; ed = null; pointers.clear(); }
+
+$('zoom').oninput = (e) => setZoom(e.target.value / 100);
+edCanvas.addEventListener('wheel', (e) => { e.preventDefault(); setZoom(ed.zoom * Math.exp(-e.deltaY * 0.0015)); }, { passive: false });
+
+edCanvas.addEventListener('pointerdown', (e) => {
+  edCanvas.setPointerCapture(e.pointerId);
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+});
+edCanvas.addEventListener('pointermove', (e) => {
+  if (!pointers.has(e.pointerId) || !ed) return;
+  const prev = pointers.get(e.pointerId);
+  const k = edCanvas.width / edCanvas.getBoundingClientRect().width;
+  if (pointers.size === 1) {
+    const r = Math.max(edCanvas.width / ed.img.width, edCanvas.height / ed.img.height) * ed.zoom;
+    ed.cx -= (e.clientX - prev.x) * k / r;
+    ed.cy -= (e.clientY - prev.y) * k / r;
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    drawEd();
+  } else if (pointers.size === 2) {
+    const before = [...pointers.values()];
+    const d0 = Math.hypot(before[0].x - before[1].x, before[0].y - before[1].y);
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const after = [...pointers.values()];
+    const d1 = Math.hypot(after[0].x - after[1].x, after[0].y - after[1].y);
+    if (d0 > 0) setZoom(ed.zoom * d1 / d0);
+  }
+});
+const endPointer = (e) => pointers.delete(e.pointerId);
+edCanvas.addEventListener('pointerup', endPointer);
+edCanvas.addEventListener('pointercancel', endPointer);
+
+$('edCancel').onclick = closeEditor;
+$('edSave').onclick = () => {
+  const c = state.cells[ed.i];
+  c.zoom = ed.zoom; c.cx = ed.cx; c.cy = ed.cy;
+  closeEditor();
+  draw();
+};
+$('edChange').onclick = () => { targetCell = ed.i; $('one').click(); };
 
 // ===== イベント =====
-LAYOUTS.forEach((l, i) => $('layout').add(new Option(l.label, i)));
-$('layout').onchange = (e) => { state.layout = LAYOUTS[e.target.value]; draw(); };
 $('gap').oninput = (e) => { state.gap = +e.target.value; $('gapOut').textContent = state.gap + 'px'; draw(); };
-$('caption').oninput = (e) => { state.caption = e.target.value; draw(); };
 
 $('blurOn').onchange = (e) => {
   state.blurOn = e.target.checked;
@@ -209,43 +272,44 @@ $('blurSize').oninput = (e) => {
   draw();
 };
 
-$('pick').onclick = () => $('files').click();
-$('files').onchange = async (e) => {
-  const imgs = await Promise.all([...e.target.files].map(loadImage));
-  state.images = imgs.slice(0, state.layout.cols * state.layout.rows);
-  e.target.value = '';
-  draw();
-  if (state.blurOn) ensureEyes();
-};
-
+// プレビューのマスをタップ：空なら画像選択、写真ありなら調整画面
 canvas.onclick = (e) => {
   const rect = canvas.getBoundingClientRect();
   const px = (e.clientX - rect.left) * (OUT_W / rect.width);
   const py = (e.clientY - rect.top) * (OUT_H / rect.height);
-  const { cols, rows } = state.layout;
-  const g = state.gap, capH = state.caption ? CAPTION_HEIGHT : 0;
-  const cw = (OUT_W - g * (cols + 1)) / cols;
-  const ch = (OUT_H - capH - g * (rows + 1)) / rows;
-  const col = Math.floor((px - g / 2) / (cw + g));
-  const row = Math.floor((py - g / 2) / (ch + g));
-  if (col < 0 || col >= cols || row < 0 || row >= rows) return;
-  targetCell = row * cols + col;
-  $('one').click();
-};
-$('one').onchange = async (e) => {
-  if (e.target.files[0] && targetCell !== null) {
-    state.images[targetCell] = await loadImage(e.target.files[0]);
-    draw();
-    if (state.blurOn) ensureEyes();
+  const { g, cw, ch } = geom();
+  for (let i = 0; i < COLS * ROWS; i++) {
+    const x = g + (i % COLS) * (cw + g);
+    const y = g + Math.floor(i / COLS) * (ch + g);
+    if (px >= x && px <= x + cw && py >= y && py <= y + ch) {
+      targetCell = i;
+      if (state.cells[i]) openEditor(i); else $('one').click();
+      return;
+    }
   }
-  e.target.value = '';
 };
 
-$('clear').onclick = () => { state.images = []; setStatus(''); draw(); };
+$('one').onchange = async (e) => {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (!file || targetCell === null) return;
+  state.cells[targetCell] = newCell(await loadImage(file));
+  if (ed) { // 調整画面から「画像を変更」した場合
+    const c = state.cells[targetCell];
+    ed = { i: targetCell, img: c.img, zoom: 1, cx: c.cx, cy: c.cy };
+    syncZoomUI(); drawEd();
+  }
+  draw();
+  if (state.blurOn) ensureEyes();
+};
 
-// 保存：押したらそのままダウンロード
+$('clear').onclick = () => { state.cells = [null, null, null, null]; setStatus(''); draw(); };
+
+// 保存：書き出し時は背景を黒にして自動ダウンロード
 $('save').onclick = () => {
+  draw(true);
   canvas.toBlob((blob) => {
+    draw(false); // プレビューに戻す
     const a = document.createElement('a');
     const d = new Date(), p = (n) => String(n).padStart(2, '0');
     a.download = `collage_${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}.png`;
