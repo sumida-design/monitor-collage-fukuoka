@@ -32,7 +32,5 @@ button.primary { background:var(--accent); }
 .status p { margin:0 0 6px; }
 button.warn { width:100%; text-align:left; background:#3a2a00; color:#ffb340;
   border:1px solid #ff9f0a; font-size:13px; padding:10px; margin-bottom:6px; }
-
-.ver { text-align:center; font-size:11px; color:#666; margin:12px 0 0; }
 .manual-row { display:flex; flex-wrap:wrap; gap:6px; align-items:center; font-size:12px; color:#bbb; }
 .manual-row button { padding:8px 12px; font-size:13px; }

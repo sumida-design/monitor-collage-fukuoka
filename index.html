@@ -6,22 +6,26 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#000000">
 <title>モニター写真作成</title>
-<link rel="stylesheet" href="style.css?v=4">
+<link rel="stylesheet" href="style.css?v=7">
 </head>
 <body>
 <main>
   <h1>モニター写真作成</h1>
 
   <div class="stage"><canvas id="canvas"></canvas></div>
-  <p class="hint" id="hint"></p>
+  <p class="hint">＋をタップして写真を選択／写真をタップすると拡大縮小・位置調整<br>書き出しサイズ：3840×2160px（背景は黒で書き出されます）</p>
 
   <section class="panel">
+    <label>余白 <output id="gapOut"></output>
+      <input id="gap" type="range" min="0" max="80" value="16">
+    </label>
+
     <div class="switch">
-      <span>目元ぼかし（目の部分に丸いぼかし）</span>
+      <span>目元ぼかし（左右の目に丸いぼかし）</span>
       <input id="blurOn" type="checkbox">
     </div>
     <label id="blurSizeWrap" hidden>ぼかしの大きさ <output id="blurSizeOut"></output>
-      <input id="blurSize" type="range" min="50" max="250" value="100">
+      <input id="blurSize" type="range" min="50" max="250" value="120">
     </label>
     <div id="status" class="status"></div>
 
@@ -30,7 +34,6 @@
       <button id="save" class="primary">画像を保存</button>
     </div>
   </section>
-  <p id="ver" class="ver"></p>
 </main>
 
 <input id="one" type="file" accept="image/*" hidden>
@@ -67,6 +70,6 @@
   </div>
 </div>
 
-<script src="app.js?v=4"></script>
+<script src="app.js?v=7"></script>
 </body>
 </html>
