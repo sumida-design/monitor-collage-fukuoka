@@ -1,4 +1,5 @@
 // ===== 設定 =====
+const VERSION = '4';
 const OUT_W = 3840, OUT_H = 2160;   // 書き出しサイズ（固定）
 const BG_EXPORT = '#000000';        // 書き出し時の背景色（黒）
 const BG_PREVIEW = '#2c2c2e';       // プレビュー時の背景色（仕切り線）
@@ -165,27 +166,40 @@ async function detectEyes(img, lm) {
         w, r: Math.max(6, Math.max(w, h * 2) * 0.6),
       };
     });
-    // 横顔：奥側の目は幅が極端に小さくなる＝見えていないので除外し、片目だけにする
+    // 横顔判定：鼻先が「両目を結んだ線」の外側に出ていたら、その側の目は奥にあって見えない
+    const nose = P(1);
+    const dx = list[1].x - list[0].x, dy = list[1].y - list[0].y;
+    const t = ((nose.x - list[0].x) * dx + (nose.y - list[0].y) * dy) / ((dx * dx + dy * dy) || 1);
     const maxW = Math.max(list[0].w, list[1].w);
-    for (const e of list) if (e.w >= maxW * 0.5) eyes.push({ x: e.x, y: e.y, r: e.r });
+    const kept = list.filter((e, k) => {
+      const hiddenByNose = (k === 0 && t < 0.1) || (k === 1 && t > 0.9);
+      const tooThin = e.w < maxW * 0.5; // 幅が極端に細い＝横を向いて奥側
+      return !hiddenByNose && !tooThin;
+    });
+    if (!kept.length) kept.push(list[0].w >= list[1].w ? list[0] : list[1]); // 最低1つは残す
+    kept.forEach((e) => eyes.push({ x: e.x, y: e.y, r: e.r }));
   }
   return eyes;
 }
 
 async function ensureEyes() {
-  const targets = [...new Set(state.cells.filter((c) => c && !c.img.eyes).map((c) => c.img))];
+  const targets = [...new Set(state.cells.filter((c) => c && (!c.img.eyes || c.img.autoFailed)).map((c) => c.img))];
   if (targets.length) {
     statusMsg = '目の検出中…（初回はモデル読み込みに数秒かかります）';
     renderStatus();
-    try {
-      const lm = await getLandmarker();
-      for (const im of targets) im.eyes = await detectEyes(im, lm);
-      statusMsg = '';
-    } catch (err) {
+    let lm = null;
+    try { lm = await getLandmarker(); }
+    catch (err) {
       console.error(err);
-      statusMsg = '目の検出に失敗しました。ネット接続を確認してください。';
-      state.blurOn = false; $('blurOn').checked = false; $('blurSizeWrap').hidden = true;
+      statusMsg = '目の自動検出を読み込めませんでした（ネット接続を確認してください）。下の表示から手動でぼかしを入れられます。';
     }
+    for (const im of targets) {
+      im.autoFailed = false;
+      if (!lm) { im.eyes = []; im.autoFailed = true; continue; }
+      try { im.eyes = await detectEyes(im, lm); }
+      catch (err) { console.error(err); im.eyes = []; im.autoFailed = true; }
+    }
+    if (lm) statusMsg = '';
   }
   renderStatus();
   draw();
@@ -206,6 +220,19 @@ function renderStatus() {
       box.appendChild(b);
     }
   });
+  if (state.cells.some(Boolean)) { // 検出結果がずれている場合にも手動で直せる
+    const row = document.createElement('div');
+    row.className = 'manual-row';
+    row.append('手動でぼかしを調整：');
+    state.cells.forEach((c, i) => {
+      if (!c) return;
+      const b = document.createElement('button');
+      b.textContent = CELL_NAMES[i];
+      b.onclick = () => openManual(i);
+      row.appendChild(b);
+    });
+    box.appendChild(row);
+  }
 }
 
 // ===== 画像読み込み =====
@@ -358,6 +385,7 @@ $('mDelete').onclick = () => {
 $('mCancel').onclick = () => { $('manual').hidden = true; man = null; };
 $('mDone').onclick = () => {
   man.img.eyes = man.circles.map((c) => ({ ...c }));
+  man.img.autoFailed = false;
   $('manual').hidden = true;
   man = null;
   renderStatus();
@@ -430,5 +458,6 @@ $('save').onclick = () => {
 };
 
 $('blurSizeOut').textContent = '100%';
+if ($('ver')) $('ver').textContent = 'v' + VERSION;
 updateHint();
 draw();
